@@ -121,6 +121,102 @@ static void test_options2(void) {
     assert(opts->record_format == SC_RECORD_FORMAT_MP4);
 }
 
+static void test_camera_exposure_options(void) {
+    struct scrcpy_cli_args args = {
+        .opts = scrcpy_options_default,
+    };
+
+    char *argv[] = {
+        "scrcpy",
+        "--video-source=camera",
+        "--camera-exposure=-1.5",
+    };
+
+    bool ok = scrcpy_parse_args(&args, ARRAY_LEN(argv), argv);
+    assert(ok);
+    assert(!strcmp(args.opts.camera_exposure, "-1.5"));
+}
+
+static void test_camera_manual_exposure_options(void) {
+    struct scrcpy_cli_args args = {
+        .opts = scrcpy_options_default,
+    };
+
+    char *argv[] = {
+        "scrcpy",
+        "--video-source=camera",
+        "--camera-fps=60",
+        "--camera-shutter=10ms",
+        "--camera-iso=400",
+    };
+
+    bool ok = scrcpy_parse_args(&args, ARRAY_LEN(argv), argv);
+    assert(ok);
+    assert(args.opts.camera_shutter == 10000000);
+    assert(args.opts.camera_iso == 400);
+}
+
+static void test_camera_exposure_invalid_combinations(void) {
+    struct scrcpy_cli_args args = {
+        .opts = scrcpy_options_default,
+    };
+
+    char *missing_iso[] = {
+        "scrcpy",
+        "--video-source=camera",
+        "--camera-shutter=10ms",
+    };
+    assert(!scrcpy_parse_args(&args, ARRAY_LEN(missing_iso), missing_iso));
+
+    args.opts = scrcpy_options_default;
+    char *mixed_modes[] = {
+        "scrcpy",
+        "--video-source=camera",
+        "--camera-exposure=1",
+        "--camera-shutter=10ms",
+        "--camera-iso=100",
+    };
+    assert(!scrcpy_parse_args(&args, ARRAY_LEN(mixed_modes), mixed_modes));
+
+    args.opts = scrcpy_options_default;
+    char *invalid_duration[] = {
+        "scrcpy",
+        "--video-source=camera",
+        "--camera-shutter=10",
+        "--camera-iso=100",
+    };
+    assert(!scrcpy_parse_args(&args, ARRAY_LEN(invalid_duration),
+                              invalid_duration));
+
+    args.opts = scrcpy_options_default;
+    char *too_slow[] = {
+        "scrcpy",
+        "--video-source=camera",
+        "--camera-fps=60",
+        "--camera-shutter=20ms",
+        "--camera-iso=100",
+    };
+    assert(!scrcpy_parse_args(&args, ARRAY_LEN(too_slow), too_slow));
+
+    args.opts = scrcpy_options_default;
+    char *display_source[] = {
+        "scrcpy",
+        "--camera-exposure=1",
+    };
+    assert(!scrcpy_parse_args(&args, ARRAY_LEN(display_source),
+                              display_source));
+
+    args.opts = scrcpy_options_default;
+    char *high_speed[] = {
+        "scrcpy",
+        "--video-source=camera",
+        "--camera-high-speed",
+        "--camera-fps=120",
+        "--camera-exposure=1",
+    };
+    assert(!scrcpy_parse_args(&args, ARRAY_LEN(high_speed), high_speed));
+}
+
 static void test_parse_shortcut_mods(void) {
     uint8_t mods;
     bool ok;
@@ -157,6 +253,9 @@ int main(int argc, char *argv[]) {
     test_flag_help();
     test_options();
     test_options2();
+    test_camera_exposure_options();
+    test_camera_manual_exposure_options();
+    test_camera_exposure_invalid_combinations();
     test_parse_shortcut_mods();
     return 0;
 }

@@ -133,6 +133,39 @@ scrcpy --video-source=camera --camera-fps=60
 ```
 
 
+## Exposure
+
+The automatic exposure may be adjusted in EV stops with
+`--camera-exposure`:
+
+```bash
+scrcpy --video-source=camera --camera-exposure=-1.5
+```
+
+The value is rounded to the nearest compensation step supported by the
+selected camera.
+
+On cameras supporting manual sensor controls, both the shutter duration and
+ISO sensitivity may be fixed:
+
+```bash
+scrcpy --video-source=camera --camera-shutter=10ms --camera-iso=400
+```
+
+The shutter duration must be a positive integer followed by `ns`, `us`, `ms`
+or `s`. For example, `8333us` may be used for a shutter duration close to
+1/120 second.
+
+`--camera-shutter` and `--camera-iso` must always be specified together. They
+cannot be combined with `--camera-exposure`, which applies to automatic
+exposure. If `--camera-fps` is also specified, the shutter duration must not
+exceed the duration of one frame.
+
+The supported exposure compensation, shutter and ISO ranges are reported by
+`--list-cameras`. These exposure controls are not available with
+`--camera-high-speed`.
+
+
 ## High speed capture
 
 The Android camera API also supports a [high speed capture mode][high speed].

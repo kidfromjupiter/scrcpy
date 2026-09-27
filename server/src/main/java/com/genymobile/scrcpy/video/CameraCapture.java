@@ -32,6 +32,7 @@ import android.media.MediaCodec;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Range;
+import android.util.Rational;
 import android.view.Surface;
 
 import java.io.IOException;
@@ -66,14 +67,19 @@ public class CameraCapture extends SurfaceCapture {
     private final Orientation captureOrientation;
     private final float angle;
     private final boolean initialTorch;
+    private final Float exposure;
+    private final long shutter;
+    private final int iso;
     private float zoom;
 
     private VideoConstraints videoConstraints;
 
     private String cameraId;
+    private CameraCharacteristics cameraCharacteristics;
     private Size captureSize;
     private Size videoSize; // after OpenGL transforms
     private Range<Float> zoomRange;
+    private Integer exposureCompensation;
 
     private AffineMatrix transform;
     private OpenGLRunner glRunner;
@@ -102,6 +108,9 @@ public class CameraCapture extends SurfaceCapture {
         assert captureOrientation != null;
         this.angle = options.getAngle();
         this.initialTorch = options.getCameraTorch();
+        this.exposure = options.getCameraExposure();
+        this.shutter = options.getCameraShutter();
+        this.iso = options.getCameraIso();
         this.zoom = options.getCameraZoom();
     }
 
@@ -121,9 +130,94 @@ public class CameraCapture extends SurfaceCapture {
             }
 
             Ln.i("Using camera '" + cameraId + "'");
+            cameraCharacteristics = ServiceManager.getCameraManager().getCameraCharacteristics(cameraId);
+            validateCameraControls(cameraCharacteristics);
             cameraDevice = openCamera(cameraId);
         } catch (CameraAccessException | InterruptedException e) {
             throw new IOException(e);
+        }
+    }
+
+    private static boolean hasCapability(CameraCharacteristics characteristics, int expectedCapability) {
+        int[] capabilities = characteristics.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES);
+        if (capabilities == null) {
+            return false;
+        }
+
+        for (int capability : capabilities) {
+            if (capability == expectedCapability) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    static int resolveExposureCompensation(float requested, int lower, int upper, float step) throws ConfigurationException {
+        if (!(step > 0)) {
+            throw new ConfigurationException("Camera exposure compensation is not supported");
+        }
+
+        float min = lower * step;
+        float max = upper * step;
+        if (requested < min || requested > max) {
+            throw new ConfigurationException("Camera exposure compensation " + requested + " is out of range [" + min + "; " + max + "]");
+        }
+
+        int compensation = Math.round(requested / step);
+        return Math.max(lower, Math.min(upper, compensation));
+    }
+
+    private void validateCameraControls(CameraCharacteristics characteristics) throws ConfigurationException {
+        boolean hasShutter = shutter > 0;
+        boolean hasIso = iso > 0;
+        if (hasShutter != hasIso) {
+            throw new ConfigurationException("Camera shutter and ISO must be specified together");
+        }
+
+        boolean manual = hasShutter;
+        if (exposure != null && manual) {
+            throw new ConfigurationException("Camera exposure compensation is incompatible with manual shutter/ISO");
+        }
+
+        if (highSpeed && (exposure != null || manual)) {
+            throw new ConfigurationException("Camera exposure controls are incompatible with high-speed capture");
+        }
+
+        if (exposure != null) {
+            Range<Integer> range = characteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
+            Rational rationalStep = characteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP);
+            if (range == null || rationalStep == null) {
+                throw new ConfigurationException("Camera exposure compensation is not supported");
+            }
+
+            float step = rationalStep.floatValue();
+            exposureCompensation = resolveExposureCompensation(exposure, range.getLower(), range.getUpper(), step);
+        }
+
+        if (manual) {
+            if (!hasCapability(characteristics, CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR)) {
+                throw new ConfigurationException("Camera does not support manual sensor controls");
+            }
+
+            Range<Long> shutterRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
+            if (shutterRange == null || !shutterRange.contains(shutter)) {
+                throw new ConfigurationException("Camera shutter duration " + shutter + "ns is not supported"
+                        + (shutterRange != null ? " (range: " + shutterRange + "ns)" : ""));
+            }
+
+            Range<Integer> isoRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
+            if (isoRange == null || !isoRange.contains(iso)) {
+                throw new ConfigurationException("Camera ISO " + iso + " is not supported"
+                        + (isoRange != null ? " (range: " + isoRange + ")" : ""));
+            }
+
+            if (fps > 0) {
+                long frameDuration = 1_000_000_000L / fps;
+                if (shutter > frameDuration) {
+                    throw new ConfigurationException("Camera shutter duration exceeds the frame duration requested by camera FPS");
+                }
+            }
         }
     }
 
@@ -302,20 +396,30 @@ public class CameraCapture extends SurfaceCapture {
                     return;
                 }
 
-                CameraManager cameraManager = ServiceManager.getCameraManager();
-                try {
-                    CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraId);
-                    zoomRange = characteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
-                } catch (CameraAccessException e) {
-                    Ln.w("Could not get camera characteristics");
-                }
+                zoomRange = cameraCharacteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
 
                 try {
                     requestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
                     requestBuilder.addTarget(captureSurface);
 
-                    if (fps > 0) {
+                    boolean manualExposure = shutter > 0;
+                    if (fps > 0 && !manualExposure) {
                         requestBuilder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, new Range<>(fps, fps));
+                    }
+                    if (exposureCompensation != null) {
+                        float actualExposure = exposureCompensation
+                                * cameraCharacteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP).floatValue();
+                        Ln.i("Set camera exposure compensation: " + actualExposure + " EV");
+                        requestBuilder.set(CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, exposureCompensation);
+                    }
+                    if (manualExposure) {
+                        Ln.i("Set manual camera exposure: " + shutter + "ns, ISO " + iso);
+                        requestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF);
+                        requestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, shutter);
+                        requestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso);
+                        if (fps > 0) {
+                            requestBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION, 1_000_000_000L / fps);
+                        }
                     }
                     if (initialTorch) {
                         Ln.i("Turn camera torch on");

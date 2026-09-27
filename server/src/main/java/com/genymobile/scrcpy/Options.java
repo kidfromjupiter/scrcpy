@@ -46,6 +46,9 @@ public class Options {
     private CameraFacing cameraFacing;
     private CameraAspectRatio cameraAspectRatio;
     private float cameraZoom = 1;
+    private Float cameraExposure;
+    private long cameraShutter;
+    private int cameraIso;
     private int cameraFps;
     private boolean cameraHighSpeed;
     private boolean cameraTorch;
@@ -181,6 +184,18 @@ public class Options {
 
     public float getCameraZoom() {
         return cameraZoom;
+    }
+
+    public Float getCameraExposure() {
+        return cameraExposure;
+    }
+
+    public long getCameraShutter() {
+        return cameraShutter;
+    }
+
+    public int getCameraIso() {
+        return cameraIso;
     }
 
     public int getCameraFps() {
@@ -510,6 +525,27 @@ public class Options {
                 case "camera_zoom":
                     if (!value.isEmpty()) {
                         options.cameraZoom = Float.parseFloat(value);
+                    }
+                    break;
+                case "camera_exposure":
+                    if (!value.isEmpty()) {
+                        float cameraExposure = parseFloat("camera_exposure", value);
+                        if (!Float.isFinite(cameraExposure)) {
+                            throw new IllegalArgumentException("Invalid camera exposure: " + value);
+                        }
+                        options.cameraExposure = cameraExposure;
+                    }
+                    break;
+                case "camera_shutter":
+                    options.cameraShutter = Long.parseLong(value);
+                    if (options.cameraShutter <= 0) {
+                        throw new IllegalArgumentException("Invalid camera shutter duration: " + value);
+                    }
+                    break;
+                case "camera_iso":
+                    options.cameraIso = Integer.parseInt(value);
+                    if (options.cameraIso <= 0) {
+                        throw new IllegalArgumentException("Invalid camera ISO: " + value);
                     }
                     break;
                 case "camera_fps":

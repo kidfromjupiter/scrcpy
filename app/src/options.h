@@ -251,6 +251,9 @@ struct scrcpy_options {
     const char *camera_size;
     const char *camera_ar;
     const char *camera_zoom;
+    const char *camera_exposure;
+    uint64_t camera_shutter;
+    uint32_t camera_iso;
     uint16_t camera_fps;
     enum sc_log_level log_level;
     enum sc_codec video_codec;

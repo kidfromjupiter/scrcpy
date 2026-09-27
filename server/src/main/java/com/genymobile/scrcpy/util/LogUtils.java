@@ -122,14 +122,14 @@ public final class LogUtils {
         }
     }
 
-    private static boolean isCameraBackwardCompatible(CameraCharacteristics characteristics) {
+    private static boolean hasCameraCapability(CameraCharacteristics characteristics, int expectedCapability) {
         int[] capabilities = characteristics.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES);
         if (capabilities == null) {
             return false;
         }
 
         for (int capability : capabilities) {
-            if (capability == CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE) {
+            if (capability == expectedCapability) {
                 return true;
             }
         }
@@ -148,7 +148,8 @@ public final class LogUtils {
                 for (String id : cameraIds) {
                     CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
 
-                    if (!isCameraBackwardCompatible(characteristics)) {
+                    if (!hasCameraCapability(characteristics,
+                            CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_BACKWARD_COMPATIBLE)) {
                         // Ignore depth cameras as suggested by official documentation
                         // <https://developer.android.com/media/camera/camera2/camera-enumeration>
                         continue;
@@ -183,6 +184,30 @@ public final class LogUtils {
                             }
                         } catch (Exception e) {
                             Ln.w("Could not get available zoom ranges for camera " + id, e);
+                        }
+                    }
+
+                    Range<Integer> compensationRange = characteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_RANGE);
+                    android.util.Rational compensationStep = characteristics.get(CameraCharacteristics.CONTROL_AE_COMPENSATION_STEP);
+                    if (compensationRange != null && compensationStep != null && compensationStep.floatValue() > 0) {
+                        float step = compensationStep.floatValue();
+                        builder.append(", exposure-range=")
+                                .append(getFormattedFloatRange(compensationRange.getLower() * step,
+                                        compensationRange.getUpper() * step))
+                                .append("EV")
+                                .append(", exposure-step=").append(new DecimalFormat("#.###").format(step)).append("EV");
+                    }
+
+                    if (hasCameraCapability(characteristics,
+                            CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_MANUAL_SENSOR)) {
+                        builder.append(", manual-sensor");
+                        Range<Long> shutterRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
+                        if (shutterRange != null) {
+                            builder.append(", shutter-range=").append(shutterRange).append("ns");
+                        }
+                        Range<Integer> isoRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
+                        if (isoRange != null) {
+                            builder.append(", iso-range=").append(isoRange);
                         }
                     }
 
@@ -241,8 +266,12 @@ public final class LogUtils {
     }
 
     private static String getFormattedZoomRange(Range<Float> range) {
+        return getFormattedFloatRange(range.getLower(), range.getUpper());
+    }
+
+    private static String getFormattedFloatRange(float lower, float upper) {
         DecimalFormat format = new DecimalFormat("#.##");
-        return "[" + format.format(range.getLower()) + ", " + format.format(range.getUpper()) + "]";
+        return "[" + format.format(lower) + ", " + format.format(upper) + "]";
     }
 
     public static String buildAppListMessage() {
