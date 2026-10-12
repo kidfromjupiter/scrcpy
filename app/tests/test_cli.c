@@ -217,6 +217,38 @@ static void test_camera_exposure_invalid_combinations(void) {
     assert(!scrcpy_parse_args(&args, ARRAY_LEN(high_speed), high_speed));
 }
 
+static void test_shm_options(void) {
+    struct scrcpy_cli_args args = { .opts = scrcpy_options_default };
+    char *headless[] = { "scrcpy", "--shm-sink=phone", "--no-window",
+                         "--no-audio", "--no-control" };
+#ifdef _WIN32
+    assert(scrcpy_parse_args(&args, ARRAY_LEN(headless), headless));
+    assert(args.opts.video);
+    assert(!args.opts.video_playback);
+    assert(!args.opts.window);
+    assert(!strcmp(args.opts.shm_sink, "phone"));
+    args.opts = scrcpy_options_default;
+    char *preview[] = { "scrcpy", "--shm-sink=phone", "--record=test.mkv" };
+    assert(scrcpy_parse_args(&args, ARRAY_LEN(preview), preview));
+    assert(args.opts.video_playback);
+#else
+    assert(!scrcpy_parse_args(&args, ARRAY_LEN(headless), headless));
+#endif
+    const char *bad[] = { "--shm-sink=", "--shm-sink=a/b", "--shm-sink=a b",
+        "--shm-sink=abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567890123" };
+    for (unsigned i = 0; i < ARRAY_LEN(bad); ++i) {
+        args.opts = scrcpy_options_default;
+        char *argv[] = { "scrcpy", (char *) bad[i] };
+        assert(!scrcpy_parse_args(&args, ARRAY_LEN(argv), argv));
+    }
+    args.opts = scrcpy_options_default;
+    char *disabled[] = { "scrcpy", "--shm-sink=phone", "--no-video" };
+    assert(!scrcpy_parse_args(&args, ARRAY_LEN(disabled), disabled));
+    args.opts = scrcpy_options_default;
+    char *otg[] = { "scrcpy", "--shm-sink=phone", "--otg" };
+    assert(!scrcpy_parse_args(&args, ARRAY_LEN(otg), otg));
+}
+
 static void test_parse_shortcut_mods(void) {
     uint8_t mods;
     bool ok;
@@ -257,5 +289,6 @@ int main(int argc, char *argv[]) {
     test_camera_manual_exposure_options();
     test_camera_exposure_invalid_combinations();
     test_parse_shortcut_mods();
+    test_shm_options();
     return 0;
 }

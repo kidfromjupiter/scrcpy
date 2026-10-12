@@ -585,6 +585,10 @@ For example, to use either LCtrl or LSuper for scrcpy shortcuts, pass "lctrl,lsu
 Default is "lalt,lsuper" (left-Alt or left-Super).
 
 .TP
+.BI "\-\-shm\-sink " name
+Publish the newest decoded YUV420P frame in Windows shared memory, without playback buffering. Names contain 1-64 ASCII letters, digits, underscores, dots or hyphens. Requires video capture; incompatible with OTG mode. Windows only. See doc/shared_memory.md for the Python/OpenCV reader and protocol.
+
+.TP
 .BI "\-\-start\-app " name
 Start an Android app, by its exact package name.
 

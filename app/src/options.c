@@ -3,6 +3,7 @@
 #include <stddef.h>
 
 const struct scrcpy_options scrcpy_options_default = {
+    .shm_sink = NULL,
     .serial = NULL,
     .crop = NULL,
     .record_filename = NULL,

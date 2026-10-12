@@ -12,6 +12,7 @@
 // not needed here, but winsock2.h must never be included AFTER windows.h
 # include <winsock2.h>
 # include <windows.h>
+# include "shm_sink.h"
 #endif
 
 #include "audio_player.h"
@@ -49,6 +50,9 @@
 #include "video_regulator.h"
 
 struct scrcpy {
+#ifdef _WIN32
+    struct sc_shm_sink shm_sink;
+#endif
     struct sc_server server;
     struct sc_screen screen;
     struct sc_audio_player audio_player;
@@ -340,6 +344,9 @@ scrcpy(struct scrcpy_options *options) {
     bool file_pusher_initialized = false;
     bool recorder_initialized = false;
     bool recorder_started = false;
+#ifdef _WIN32
+    bool shm_sink_initialized = false;
+#endif
 #ifdef HAVE_V4L2
     bool v4l2_sink_initialized = false;
 #endif
@@ -549,6 +556,7 @@ scrcpy(struct scrcpy_options *options) {
     }
 
     bool needs_video_decoder = options->video_playback;
+    needs_video_decoder |= !!options->shm_sink;
     bool needs_audio_decoder = options->audio_playback;
 #ifdef HAVE_V4L2
     needs_video_decoder |= !!options->v4l2_device;
@@ -832,6 +840,17 @@ aoa_complete:
     }
 #endif
 
+#ifdef _WIN32
+    if (options->shm_sink) {
+        if (!sc_shm_sink_init(&s->shm_sink, options->shm_sink)) {
+            goto end;
+        }
+        shm_sink_initialized = true;
+        sc_frame_source_add_sink(&s->video_decoder.frame_source,
+                                 &s->shm_sink.frame_sink);
+    }
+#endif
+
     // Now that the header values have been consumed, the socket(s) will
     // receive the stream(s). Start the demuxer(s).
 
@@ -972,6 +991,12 @@ end:
     if (audio_demuxer_started) {
         sc_demuxer_join(&s->audio_demuxer);
     }
+
+#ifdef _WIN32
+    if (shm_sink_initialized) {
+        sc_shm_sink_destroy(&s->shm_sink);
+    }
+#endif
 
 #ifdef HAVE_V4L2
     if (v4l2_sink_initialized) {

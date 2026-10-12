@@ -2,6 +2,9 @@
 
 Camera mirroring is supported for devices with Android 12 or higher.
 
+For direct low-latency camera frames in Python/OpenCV on Windows, see
+[shared-memory output](shared_memory.md).
+
 To capture the camera instead of the device screen:
 
 ```bash

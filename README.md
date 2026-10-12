@@ -168,6 +168,7 @@ documented in the following pages:
  - [OTG](doc/otg.md)
  - [Camera](doc/camera.md)
  - [Video4Linux](doc/v4l2.md)
+ - [Shared memory for Python/OpenCV (Windows)](doc/shared_memory.md)
  - [Shortcuts](doc/shortcuts.md)
 
 

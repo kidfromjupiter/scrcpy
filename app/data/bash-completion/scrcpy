@@ -90,6 +90,7 @@ _scrcpy() {
         -s --serial=
         -S --turn-screen-off
         --screen-off-timeout=
+        --shm-sink=
         --shortcut-mod=
         --start-app=
         -t --show-touches
@@ -227,6 +228,7 @@ _scrcpy() {
         |--push-target \
         |--rotation \
         |--screen-off-timeout \
+        |--shm-sink \
         |--tunnel-host \
         |--tunnel-port \
         |--v4l2-buffer \

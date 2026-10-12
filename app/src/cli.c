@@ -46,6 +46,7 @@ enum {
     OPT_VIDEO_ENCODER,
     OPT_POWER_OFF_ON_CLOSE,
     OPT_V4L2_SINK,
+    OPT_SHM_SINK,
     OPT_VIDEO_BUFFER,
     OPT_V4L2_BUFFER,
     OPT_TUNNEL_HOST,
@@ -152,6 +153,15 @@ struct sc_getopt_adapter {
 };
 
 static const struct sc_option options[] = {
+    {
+        .longopt_id = OPT_SHM_SINK,
+        .longopt = "shm-sink",
+        .argdesc = "name",
+        .text = "Publish the newest decoded YUV frame in Windows shared "
+                "memory, without playback buffering.\n"
+                "Name: 1-64 ASCII letters, digits, underscores, dots or "
+                "hyphens. Windows only; see doc/shared_memory.md.",
+    },
     {
         .longopt_id = OPT_ALWAYS_ON_TOP,
         .longopt = "always-on-top",
@@ -2865,6 +2875,22 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
                 LOGE("OTG mode (--otg) is disabled.");
                 return false;
 #endif
+            case OPT_SHM_SINK:
+#ifdef _WIN32
+                if (!*optarg || strlen(optarg) > 64
+                        || strspn(optarg, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                  "abcdefghijklmnopqrstuvwxyz0123456789_.-")
+                           != strlen(optarg)) {
+                    LOGE("Invalid shared-memory name (use 1-64 ASCII "
+                         "letters, digits, underscores, dots or hyphens)");
+                    return false;
+                }
+                opts->shm_sink = optarg;
+                break;
+#else
+                LOGE("Shared-memory output (--shm-sink) requires Windows");
+                return false;
+#endif
             case OPT_V4L2_SINK:
 #ifdef HAVE_V4L2
                 opts->v4l2_device = optarg;
@@ -3107,8 +3133,14 @@ parse_args_with_getopt(struct scrcpy_cli_args *args, int argc, char *argv[],
         opts->audio_playback = false;
     }
 
+    if (opts->shm_sink && (!opts->video || otg)) {
+        LOGE("Shared-memory output requires video capture and is "
+             "incompatible with OTG mode");
+        return false;
+    }
+
     if (opts->video && !opts->video_playback && !opts->record_filename
-            && !v4l2) {
+            && !v4l2 && !opts->shm_sink) {
         LOGI("No video playback, no recording, no V4L2 sink: video disabled");
         opts->video = false;
     }

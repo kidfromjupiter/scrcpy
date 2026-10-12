@@ -8,3 +8,5 @@ build/
 /x/
 local.properties
 /scrcpy-server
+/.venv/
+__pycache__/

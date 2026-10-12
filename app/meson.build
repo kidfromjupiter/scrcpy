@@ -82,6 +82,7 @@ if host_machine.system() == 'windows'
         'src/util/command.c',
         'src/sys/win/file.c',
         'src/sys/win/process.c',
+        'src/shm_sink.c',
         windows.compile_resources('scrcpy-windows.rc'),
     ]
     feature_test_macros += [
@@ -286,6 +287,14 @@ if get_option('buildtype') == 'debug'
             'tests/test_vector.c',
         ]],
     ]
+
+    if host_machine.system() == 'windows'
+        tests += [['test_shm_sink', [
+            'tests/test_shm_sink.c',
+            'src/shm_sink.c',
+            'src/util/log.c',
+        ]]]
+    endif
 
     foreach t : tests
         sources = t[1] + ['src/compat.c']
